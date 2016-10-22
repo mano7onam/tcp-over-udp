@@ -4,6 +4,6 @@ project(Prj)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -pthread")
 
 set(SOURCE_FILES tcp_server.cpp tcp_server.h connection.cpp
-        connection.h includes.h tcp_client.cpp tcp_client.h main_server.cpp buffer.h)
+        connection.h includes.h tcp_client.cpp tcp_client.h main_server.cpp buffer.h tcp_socket.h)
 
 add_executable(Prj ${SOURCE_FILES})
