@@ -149,6 +149,7 @@ int TCP_Server::do_recv(int socket_fd, void* buf, size_t size) {
     }
     Connection* con = connections[socket_fd];
 
+    // lock mutex and wait while no data in buffer
     std::unique_lock<std::mutex> lock(con->mtx_recv);
     fprintf(stderr, "Size buf: %d\n", con->recv_buf->get_size());
     while (con->recv_buf->is_empty()) {
@@ -157,7 +158,23 @@ int TCP_Server::do_recv(int socket_fd, void* buf, size_t size) {
     }
     fprintf(stderr, "Waiting finished!\n");
 
-    return con->recv_buf->get_data(buf, size, true);
+    // take data from buffer
+    int res_size = con->recv_buf->get_data(buf, size, true);
+
+    // read all from pipe to next select
+    fprintf(stderr, "Before read\n");
+    /*int flags = fcntl(con->pipe_fd[0], F_GETFL, 0);
+    fcntl(con->pipe_fd[0], F_SETFL, flags | O_NONBLOCK);*/
+    fprintf(stderr, "Size: %d\n", read(con->pipe_fd[0], this->buf, 4000));
+    fprintf(stderr, "After read\n");
+
+    // if remain data in buffer read to pipe to next select
+    if (con->recv_buf->get_size() != 0) {
+        write(con->pipe_fd[1], this->buf, 4);
+        fprintf(stderr, "Rest data\n");
+    }
+
+    return res_size;
 }
 
 int TCP_Server::do_send(int socket_fd, void* buf, size_t size) {

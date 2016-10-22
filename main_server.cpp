@@ -48,7 +48,9 @@ int main(int argc, char** argv) {
 
         for (int i = 0; i < num_fds; ++i) {
             if (FD_ISSET(fds[i], &readfds)) {
-                read(fds[i], buf, 4);
+                fprintf(stderr, "Before\n");
+                //read(fds[i], buf, 4000);
+                fprintf(stderr, "After\n");
                 fprintf(stderr, "Message from [%d]:\n", i);
                 int size = tcp_server.do_recv(fds[i], buf, 50);
                 ((char*)buf)[size + 1] = '\0';
