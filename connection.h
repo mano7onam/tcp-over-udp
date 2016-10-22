@@ -7,6 +7,7 @@
 
 #include "includes.h"
 #include "buffer.h"
+#include "pipe_buffer.h"
 
 struct ConnectionException : public std::exception {
     std::string s;
@@ -35,17 +36,19 @@ struct Connection {
     std::mutex mtx_send;
     std::condition_variable cv_send;
     int send_message_number; // order number sent data
+    int last_time_send_message;
     Buffer* send_buf;
 
     // descriptor for user's select or poll
-    int pipe_fd[2];
+    //int pipe_fd[2];
+    Pipe_Buffer *pipe_buffer_recv;
 
     Connection(int size_tmp_buf, int size_recv_buf, int size_send_buf,
                unsigned short start_port, struct sockaddr_in his_addr);
 
-    int do_background_recv();
+    ssize_t do_background_recv();
 
-    int do_background_send();
+    ssize_t do_background_send();
 
     // todo delete this kostyl!!!
     void set_his_port(unsigned short port) { his_addr.sin_port = port; }

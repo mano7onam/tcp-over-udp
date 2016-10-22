@@ -15,6 +15,7 @@ Connection::Connection(int size_tmp_buf, int size_recv_buf, int size_send_buf,
     last_recv_message_size = 0;
     recv_buf = new Buffer(size_recv_buf);
 
+    last_time_send_message = 0;
     send_message_number = 0;
     send_buf = new Buffer(size_send_buf);
 
@@ -29,8 +30,14 @@ Connection::Connection(int size_tmp_buf, int size_recv_buf, int size_send_buf,
     if (socket_fd <= 0)
         throw ConnectionException("Can't create socket.");
 
-    if (pipe(pipe_fd) == -1)
+    /*if (pipe(pipe_fd) == -1)
+        throw ConnectionException("Can't open pipe.");*/
+    try {
+        pipe_buffer_recv = new Pipe_Buffer();
+    }
+    catch (Pipe_Buffer_Exception ex) {
         throw ConnectionException("Can't open pipe.");
+    }
 
     my_addr.sin_family = PF_INET;
     my_addr.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -55,7 +62,7 @@ void push_int_to_buffer(int val, void* buf, int offs) {
     ((uint32_t*)((char*)buf + offs))[0] = nval;
 }
 
-int Connection::do_background_recv() {
+ssize_t Connection::do_background_recv() {
     sockaddr_in addr;
     bzero(&addr, sizeof(struct sockaddr_in));
     int size = recvfrom(socket_fd, tmp_buf, sz_tmp_buf, 0, (struct sockaddr *) &addr, &addr_size);
@@ -91,23 +98,29 @@ int Connection::do_background_recv() {
             return -1;
         }
         fprintf(stderr, "Have data number %d, size %d\n", r_recv_message_number, r_recv_message_size);
-        std::unique_lock<std::mutex> lock(mtx_recv);
+
+        /*std::unique_lock<std::mutex> lock(mtx_recv);
         if (recv_buf->get_rest_capacity() < r_recv_message_size){
             cv_recv.notify_one();
             return 0;
         }
         fprintf(stderr, "Pushed data size %d\n", r_recv_message_size);
         recv_buf->push_data((void*)((char*)tmp_buf + 16), r_recv_message_size);
-        last_recv_message_size = r_recv_message_size;
+        write(pipe_fd[1], tmp_buf, 4); // signal if poll or select on pipe*/
+
+        ssize_t size_write = pipe_buffer_recv->do_write_from((void *) ((char *) tmp_buf + 16), r_recv_message_size);
+
         ++recv_message_number;
-        write(pipe_fd[1], tmp_buf, 4); // signal if poll or select on pipe
+        last_recv_message_size = r_recv_message_size;
         cv_recv.notify_one();
+
+        return size_write;
     }
     //fprintf(stderr, "Num and size: %d %d\n", r_recv_message_number, r_recv_message_size);
-    return r_recv_message_size;
+    return 0;
 }
 
-int Connection::do_background_send() {
+ssize_t Connection::do_background_send() {
     // send information about delivery message from
     // send that we receive last message and size this message
     push_int_to_buffer(recv_message_number - 1, tmp_buf, 0);
@@ -138,5 +151,6 @@ Connection::~Connection() {
     close(socket_fd);
     free(tmp_buf);
     delete recv_buf;
+    delete pipe_buffer_recv;
     delete send_buf;
 }

@@ -12,7 +12,7 @@
       <sourceFolder url="file://$MODULE_DIR$/tcp_server.h" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/includes.h" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/connection.cpp" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/tcp_socket.h" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/pipe_buffer.h" isTestSource="false" />
     </content>
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="module-library">

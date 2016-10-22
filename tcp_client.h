@@ -40,9 +40,9 @@ struct TCP_Client {
 
     int do_connect(struct sockaddr_in addr);
 
-    int do_recv(void* buf, size_t size);
+    ssize_t do_recv(void* buf, size_t size);
 
-    int do_send(void* buf, size_t size);
+    ssize_t do_send(void* buf, size_t size);
 
     ~TCP_Client();
 };

@@ -10,6 +10,7 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <sys/time.h>
 #include <netinet/in.h>
 #include <netdb.h>
 #include <unistd.h>
@@ -29,5 +30,9 @@
 #define CUSTOM_CONNECTION_TMP_BUFFER_SIZE 1024
 #define CUSTOM_CONNECTION_RECV_BUFFER_SIZE 8388608
 #define CUSTOM_CONNECTION_SEND_BUFFER_SIZE 8388608
+
+// microsecounds:
+#define CUSTOM_PERIOD_SEND_DATA 1000
+#define CUSTOM_SELECT_TIMEOUT 3000000
 
 #endif //PRJ_INCLUDES_H

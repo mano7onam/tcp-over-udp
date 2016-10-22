@@ -49,9 +49,9 @@ struct TCP_Server {
 
     int do_accept();
 
-    int do_recv(int socket_fd, void* buf, size_t size);
+    ssize_t do_recv(int socket_fd, void* buf, size_t size);
 
-    int do_send(int socket_fd, void* buf, size_t size);
+    ssize_t do_send(int socket_fd, void* buf, size_t size);
 
     ~TCP_Server();
 };

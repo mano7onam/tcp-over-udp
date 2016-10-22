@@ -19,16 +19,19 @@ TCP_Server::TCP_Server(int socket_fd) {
     listen_thread = NULL;
 }
 
-void background_receive_thread_function(TCP_Server* server) {
-    while (server->listen_flag) {
+void background_send_receive_thread_function(TCP_Server *server) {
+    bool have_send_data = false;
+    while (server->listen_flag || have_send_data) {
+        have_send_data = false;
         if (server->connections.empty())
             continue;
+
+        struct timeval tv;
         fd_set readfds;
         int max_fd = -1;
         FD_ZERO(&readfds);
         for (auto elem : server->connections) {
             Connection* con = elem.second;
-            con->do_background_send();
             FD_SET(con->socket_fd, &readfds);
             if (max_fd == -1 || max_fd < con->socket_fd)
                 max_fd = con->socket_fd;
@@ -36,7 +39,7 @@ void background_receive_thread_function(TCP_Server* server) {
         if (-1 == max_fd)
             continue;
 
-        struct timeval tv = {0, 3000000};
+        tv = {0, CUSTOM_SELECT_TIMEOUT};
         int activity = select(max_fd + 1, &readfds, NULL, NULL, &tv);
         if (activity < 0)
             continue;
@@ -44,9 +47,20 @@ void background_receive_thread_function(TCP_Server* server) {
         for (auto elem : server->connections) {
             Connection* con = elem.second;
             if (FD_ISSET(con->socket_fd, &readfds)) {
-                int res = con->do_background_recv();
+                ssize_t res = con->do_background_recv();
                 if (res < 0) {
                     fprintf(stderr, "%s\n", "Error when receive to buffer");
+                }
+            }
+
+            gettimeofday(&tv, NULL);
+            int current_time = (int)tv.tv_usec + (int)tv.tv_sec * 1000000;
+            int diff_time = abs(current_time - con->last_time_send_message);
+            if (diff_time > CUSTOM_PERIOD_SEND_DATA) {
+                con->last_time_send_message = current_time;
+                ssize_t res = con->do_background_send();
+                if (res < 0) {
+                    fprintf(stderr, "%s\n", "Error when send from buffer");
                 }
             }
         }
@@ -55,7 +69,7 @@ void background_receive_thread_function(TCP_Server* server) {
 
 void TCP_Server::do_listen() {
     listen_flag = true;
-    listen_thread = new std::thread(background_receive_thread_function, this);
+    listen_thread = new std::thread(background_send_receive_thread_function, this);
 }
 
 int TCP_Server::do_accept() {
@@ -68,7 +82,7 @@ int TCP_Server::do_accept() {
     unsigned short source_port; // port new connection
     while (1) {
         fprintf(stderr, "Server:\n");
-        int size = recvfrom(socket_fd, buf, CUSTOM_SERVER_BUFFER_SIZE, 0, (struct sockaddr *) &addr, &addr_size);
+        ssize_t size = recvfrom(socket_fd, buf, CUSTOM_SERVER_BUFFER_SIZE, 0, (struct sockaddr *) &addr, &addr_size);
         his_addr = addr;
         source_ip   = ntohl(addr.sin_addr.s_addr);
         source_port = ntohs(addr.sin_port);
@@ -122,7 +136,8 @@ int TCP_Server::do_accept() {
             continue;
 
         fprintf(stderr, "%d\n", activity);
-        int size = recvfrom(socket_fd, buf, CUSTOM_SERVER_BUFFER_SIZE, 0, (struct sockaddr *) &addr, &addr_size);
+        ssize_t size = recvfrom(socket_fd, buf, CUSTOM_SERVER_BUFFER_SIZE, 0,
+                                (struct sockaddr *) &addr, &addr_size);
         if (size < 2) {
             fprintf(stderr, "Size of package must be greater than 2\n");
             continue;
@@ -137,47 +152,23 @@ int TCP_Server::do_accept() {
         break;
     }
 
-    connections[connection->pipe_fd[0]] = connection;
-    m_connections[Ip_Port(source_ip, source_port)] = connection->pipe_fd[0];
-    return connection->pipe_fd[0];
+    connections[connection->pipe_buffer_recv->get_read_side()] = connection;
+    m_connections[Ip_Port(source_ip, source_port)] = connection->pipe_buffer_recv->get_read_side();
+    return connection->pipe_buffer_recv->get_read_side();
 }
 
-int TCP_Server::do_recv(int socket_fd, void* buf, size_t size) {
+ssize_t TCP_Server::do_recv(int socket_fd, void* buf, size_t size) {
     if (!connections.count(socket_fd)) {
         fprintf(stderr, "%s\n", "No such socket descriptor in connections.");
         return -1;
     }
     Connection* con = connections[socket_fd];
 
-    // lock mutex and wait while no data in buffer
-    std::unique_lock<std::mutex> lock(con->mtx_recv);
-    fprintf(stderr, "Size buf: %d\n", con->recv_buf->get_size());
-    while (con->recv_buf->is_empty()) {
-        fprintf(stderr, "Wait!!!\n");
-        con->cv_recv.wait(lock);
-    }
-    fprintf(stderr, "Waiting finished!\n");
-
-    // take data from buffer
-    int res_size = con->recv_buf->get_data(buf, size, true);
-
-    // read all from pipe to next select
-    fprintf(stderr, "Before read\n");
-    /*int flags = fcntl(con->pipe_fd[0], F_GETFL, 0);
-    fcntl(con->pipe_fd[0], F_SETFL, flags | O_NONBLOCK);*/
-    fprintf(stderr, "Size: %d\n", read(con->pipe_fd[0], this->buf, 4000));
-    fprintf(stderr, "After read\n");
-
-    // if remain data in buffer read to pipe to next select
-    if (con->recv_buf->get_size() != 0) {
-        write(con->pipe_fd[1], this->buf, 4);
-        fprintf(stderr, "Rest data\n");
-    }
-
+    ssize_t res_size = con->pipe_buffer_recv->do_read_to(buf, size);
     return res_size;
 }
 
-int TCP_Server::do_send(int socket_fd, void* buf, size_t size) {
+ssize_t TCP_Server::do_send(int socket_fd, void* buf, size_t size) {
     if (!connections.count(socket_fd)) {
         fprintf(stderr, "%s\n", "No such socket descriptor in connections.");
         return -1;

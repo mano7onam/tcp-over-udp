@@ -14,29 +14,42 @@ TCP_Client::TCP_Client(int socket_fd) {
     listen_thread = NULL;
 }
 
-void background_receive_thread_function(TCP_Client* client) {
+void background_send_receive_thread_function(TCP_Client *client) {
     while (client->listen_flag) {
+        // for work with time
+        struct timeval tv;
+
         fd_set readfds;
         int max_fd = -1;
         FD_ZERO(&readfds);
         Connection* con = client->connection;
         FD_SET(con->socket_fd, &readfds);
-        int size = con->do_background_send();
 
-        if (max_fd == -1 || max_fd < con->socket_fd)
+        if (max_fd < con->socket_fd)
             max_fd = con->socket_fd;
         if (-1 == max_fd)
             continue;
 
-        struct timeval tv = {1, 0};
+        tv = {0, CUSTOM_SELECT_TIMEOUT};
         int activity = select(max_fd + 1, &readfds, NULL, NULL, &tv);
         if (activity < 0)
             continue;
 
         if (FD_ISSET(con->socket_fd, &readfds)) {
-            int res = con->do_background_recv();
+            ssize_t res = con->do_background_recv();
             if (res < 0) {
                 fprintf(stderr, "%s\n", "Error when receive to buffer");
+            }
+        }
+
+        gettimeofday(&tv, NULL);
+        int current_time = (int)tv.tv_usec + (int)tv.tv_sec * 1000000;
+        int diff_time = abs(current_time - con->last_time_send_message);
+        if (diff_time > CUSTOM_PERIOD_SEND_DATA) {
+            con->last_time_send_message = current_time;
+            ssize_t res = con->do_background_send();
+            if (res < 0) {
+                fprintf(stderr, "%s\n", "Error when send from buffer");
             }
         }
     }
@@ -110,21 +123,26 @@ int TCP_Client::do_connect(struct sockaddr_in his_addr) {
 
     // start to receive messages in new connection
     listen_flag = true;
-    listen_thread = new std::thread(background_receive_thread_function, this);
+    listen_thread = new std::thread(background_send_receive_thread_function, this);
 
-    return connection->pipe_fd[0];
+    //return connection->pipe_fd[0];
+    return connection->pipe_buffer_recv->get_read_side();
 }
 
-int TCP_Client::do_recv(void *buf, size_t size) {
+ssize_t TCP_Client::do_recv(void *buf, size_t size) {
     std::unique_lock<std::mutex> lock(connection->mtx_recv);
     while (connection->recv_buf->is_empty()) {
         connection->cv_recv.wait(lock);
     }
 
-    return connection->recv_buf->get_data(buf, size, true);
+    //int res_size = connection->recv_buf->get_data(buf, size, true);
+
+    ssize_t res_size = connection->pipe_buffer_recv->do_read_to(buf, size);
+
+    return res_size;
 }
 
-int TCP_Client::do_send(void *buf, size_t size) {
+ssize_t TCP_Client::do_send(void *buf, size_t size) {
     fprintf(stderr, "do_send aaa\n");
     std::unique_lock<std::mutex> lock(connection->mtx_send);
     fprintf(stderr, "do_send bbb\n");

@@ -51,9 +51,9 @@ int main(int argc, char** argv) {
                 fprintf(stderr, "Before\n");
                 //read(fds[i], buf, 4000);
                 fprintf(stderr, "After\n");
-                fprintf(stderr, "Message from [%d]:\n", i);
                 int size = tcp_server.do_recv(fds[i], buf, 50);
                 ((char*)buf)[size + 1] = '\0';
+                fprintf(stderr, "[%d]: ", i);
                 fprintf(stderr, "Size: %d, Message: %s\n", size, (char*)buf);
             }
         }
