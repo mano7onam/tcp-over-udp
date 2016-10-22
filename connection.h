@@ -5,7 +5,7 @@
 #ifndef PRJ_CONNECTION_H
 #define PRJ_CONNECTION_H
 
-#include "includes.h"
+#include "global_definitions.h"
 #include "buffer.h"
 #include "pipe_buffer.h"
 

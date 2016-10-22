@@ -5,7 +5,7 @@
 #ifndef PRJ_BUFFER_H
 #define PRJ_BUFFER_H
 
-#include "includes.h"
+#include "global_definitions.h"
 
 class Buffer {
     int p = 0;

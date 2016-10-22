@@ -26,6 +26,9 @@
 #include <cstdint>
 #include <ctime>
 
+typedef std::pair<int, unsigned short> Ip_Port;
+
+// cuttom sizes buffers:
 #define CUSTOM_SERVER_BUFFER_SIZE 1024
 #define CUSTOM_CONNECTION_TMP_BUFFER_SIZE 1024
 #define CUSTOM_CONNECTION_RECV_BUFFER_SIZE 8388608

@@ -5,7 +5,7 @@
 #ifndef PRJ_TCP_CLIENT_H
 #define PRJ_TCP_CLIENT_H
 
-#include "includes.h"
+#include "global_definitions.h"
 #include "connection.h"
 
 

@@ -2,17 +2,19 @@
 <module type="CPP_MODULE" version="4">
   <component name="NewModuleRootManager">
     <content url="file://$MODULE_DIR$">
-      <sourceFolder url="file://$MODULE_DIR$/tcp_server.cpp" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/buffer.h" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/CMakeLists.txt" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/tcp_client.cpp" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/tcp_server.cpp" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/CMakeLists.txt" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/pipe_create_server_connections.cpp" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/tcp_client.h" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/main_server.cpp" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/connection.h" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/tcp_server.h" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/includes.h" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/connection.cpp" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/buffer.h" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/pipe_buffer.h" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/global_definitions.h" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/pipe_create_server_connections.h" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/connection.cpp" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/tcp_server.h" isTestSource="false" />
     </content>
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="module-library">

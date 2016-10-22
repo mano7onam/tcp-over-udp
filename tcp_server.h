@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "includes.h"
+#include "global_definitions.h"
 #include "connection.h"
 
 #define MAX_QUEUE_ACCEPT_SIZE 1000
@@ -18,8 +18,6 @@
 #define RS_ACCEPT_1_SIZE
 #define RS_ACCEPT_2 'b'
 #define RS_ACCEPT_2_SIZE
-
-typedef std::pair<int, unsigned short> Ip_Port;
 
 struct TCP_Server {
     int socket_fd;
