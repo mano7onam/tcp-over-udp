@@ -38,7 +38,9 @@ struct TCP_Client {
 
     TCP_Client(int socket_fd);
 
-    int do_connect(struct sockaddr_in addr);
+    TCP_Client(unsigned short port);
+
+    int do_connect(std::string ip_addr, unsigned short port);
 
     ssize_t do_recv(void* buf, size_t size);
 

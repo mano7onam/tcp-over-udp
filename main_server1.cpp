@@ -49,6 +49,11 @@ int main(int argc, char** argv) {
                 //read(fds[i], buf, 4000);
                 fprintf(stderr, "After\n");
                 ssize_t size = tcp_server.do_recv(fds[i], buf, 50);
+                if (size == 0) {
+                    fprintf(stderr, "Closed connection %d\n", i);
+                    fds.erase(fds.begin() + i);
+                    continue;
+                }
                 ((char*)buf)[size + 1] = '\0';
                 fprintf(stderr, "[%d]: ", i);
                 fprintf(stderr, "Size: %d, Message: %s\n", size, (char*)buf);

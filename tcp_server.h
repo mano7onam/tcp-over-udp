@@ -5,20 +5,9 @@
 #ifndef PRJ_TCP_SERVER_H
 #define PRJ_TCP_SERVER_H
 
-
-#pragma once
-
 #include "global_definitions.h"
 #include "connection.h"
 #include "connections_creator.h"
-
-#define MAX_QUEUE_ACCEPT_SIZE 1000
-
-// RS - "receive server" types:
-#define RS_ACCEPT_1 'a'
-#define RS_ACCEPT_1_SIZE
-#define RS_ACCEPT_2 'b'
-#define RS_ACCEPT_2_SIZE
 
 struct TCP_Server {
     int socket_fd;
@@ -27,13 +16,6 @@ struct TCP_Server {
     std::map<int, Connection*> connections;
     std::map<Ip_Port, int> m_connections;
     std::mutex mtx_connections;
-
-    std::mutex mtx_accept1;
-    std::mutex mtx_accept2;
-    std::condition_variable cv_accept1;
-    Connection* curent_accept_connection = NULL;
-    std::queue<Connection*> queue_accept_connections;
-    int port_counter;
 
     void* buf;
     int pbuf;
@@ -48,6 +30,8 @@ struct TCP_Server {
 
     TCP_Server(unsigned short port);
 
+    int delete_active_connection(int id_connection, std::string cause);
+
     int get_server_socket(); // return pipe to select support accept
 
     void do_listen();
@@ -57,6 +41,8 @@ struct TCP_Server {
     ssize_t do_recv(int socket_fd, void* buf, size_t size);
 
     ssize_t do_send(int socket_fd, void* buf, size_t size);
+
+    int do_close(int socket_fd);
 
     ~TCP_Server();
 };

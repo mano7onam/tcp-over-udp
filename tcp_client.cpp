@@ -14,6 +14,31 @@ TCP_Client::TCP_Client(int socket_fd) {
     listen_thread = NULL;
 }
 
+TCP_Client::TCP_Client(unsigned short port) {
+    socket_fd = 0;
+    struct sockaddr_in s_addr;
+    struct sockaddr_in addr_his;
+    struct hostent *host_info = NULL;
+
+    socket_fd = socket(PF_INET, SOCK_DGRAM, 0);
+
+    s_addr.sin_family = PF_INET;
+    s_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    unsigned short port_my = port;
+    while (1) {
+        s_addr.sin_port = htons(port_my);
+        if (0 == bind(socket_fd, (struct sockaddr *) &s_addr, sizeof(struct sockaddr_in)))
+            break;
+        ++port_my;
+    }
+
+    buf = malloc(CUSTOM_BUFFER_SIZE);
+    pbuf = 0;
+
+    listen_flag = false;
+    listen_thread = NULL;
+}
+
 void background_send_receive_thread_function(TCP_Client *client) {
     while (client->listen_flag) {
         // for work with time
@@ -47,7 +72,7 @@ void background_send_receive_thread_function(TCP_Client *client) {
         int diff_time = abs(current_time - con->last_time_send_message);
         if (diff_time > CUSTOM_PERIOD_SEND_DATA) {
             con->last_time_send_message = current_time;
-            ssize_t res = con->do_background_send();
+            ssize_t res = con->do_background_send(0);
             if (res < 0) {
                 fprintf(stderr, "%s\n", "Error when send from buffer");
             }
@@ -55,7 +80,20 @@ void background_send_receive_thread_function(TCP_Client *client) {
     }
 }
 
-int TCP_Client::do_connect(struct sockaddr_in his_addr) {
+struct sockaddr_in get_addr_from_ip_port(std::string ip_addr, unsigned short port) {
+    unsigned short port_his = port;
+    struct hostent *host_info = NULL;
+    struct sockaddr_in addr_his;
+    addr_his.sin_family = PF_INET;
+    addr_his.sin_port = htons(port_his);
+    host_info = gethostbyname(ip_addr.c_str());
+    memcpy(&addr_his.sin_addr, host_info->h_addr, host_info->h_length);
+    return addr_his;
+}
+
+int TCP_Client::do_connect(std::string ip_addr, unsigned short port) {
+    struct sockaddr_in his_addr = get_addr_from_ip_port(ip_addr, port);
+
     socklen_t addr_size = sizeof(struct sockaddr_in);
     struct sockaddr_in addr;
 

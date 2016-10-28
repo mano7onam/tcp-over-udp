@@ -38,6 +38,7 @@ typedef std::pair<int, unsigned short> Ip_Port;
 // microsecounds:
 #define CUSTOM_PERIOD_SEND_DATA 1000
 #define CUSTOM_SELECT_TIMEOUT 3000000
+#define CUSTOM_RECEIVE_TIMEOUT 10000000
 
 #define CUSTOM_SIZE_CONNECTIONS_QUEUE 10
 
