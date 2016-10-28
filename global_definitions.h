@@ -25,6 +25,7 @@
 #include <queue>
 #include <cstdint>
 #include <ctime>
+#include <atomic>
 
 typedef std::pair<int, unsigned short> Ip_Port;
 
@@ -37,5 +38,7 @@ typedef std::pair<int, unsigned short> Ip_Port;
 // microsecounds:
 #define CUSTOM_PERIOD_SEND_DATA 1000
 #define CUSTOM_SELECT_TIMEOUT 3000000
+
+#define CUSTOM_SIZE_CONNECTIONS_QUEUE 10
 
 #endif //PRJ_INCLUDES_H

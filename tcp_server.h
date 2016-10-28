@@ -10,6 +10,7 @@
 
 #include "global_definitions.h"
 #include "connection.h"
+#include "connections_creator.h"
 
 #define MAX_QUEUE_ACCEPT_SIZE 1000
 
@@ -22,8 +23,10 @@
 struct TCP_Server {
     int socket_fd;
     std::thread* main_loop_thread;
+
     std::map<int, Connection*> connections;
     std::map<Ip_Port, int> m_connections;
+    std::mutex mtx_connections;
 
     std::mutex mtx_accept1;
     std::mutex mtx_accept2;
@@ -39,9 +42,13 @@ struct TCP_Server {
     bool listen_flag;
     std::thread* listen_thread;
 
+    Connections_Creator *connections_creator;
+
     TCP_Server(int socket_fd); // it receive ready udp socket
 
-    void do_new_connection();
+    TCP_Server(unsigned short port);
+
+    int get_server_socket(); // return pipe to select support accept
 
     void do_listen();
 

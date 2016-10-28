@@ -1,46 +1,34 @@
+//
+// Created by mano on 28.10.16.
+//
+
 #include "tcp_server.h"
 
 #define PORT 4444
-#define IP_ADDRESS "localhost"
 
 int main(int argc, char** argv) {
-    int master_socket = 0;
-    struct sockaddr_in s_addr;
-    struct hostent *host_info = NULL;
-
-    master_socket = socket(PF_INET, SOCK_DGRAM, 0);
-
-    s_addr.sin_family = PF_INET;
-    s_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-    unsigned short port_my = PORT;
-    while (1) {
-        s_addr.sin_port = htons(port_my);
-        if (0 == bind(master_socket, (struct sockaddr *) &s_addr, sizeof(struct sockaddr_in)))
-            break;
-        ++port_my;
-    }
-
-    TCP_Server tcp_server(master_socket);
+    unsigned short port = PORT;
+    TCP_Server tcp_server(port);
+    int server_socket = tcp_server.get_server_socket();
     tcp_server.do_listen();
 
-    int fds[2];
-    int num_fds = 2;
-    for (int i = 0; i < num_fds; ++i) {
-        fds[i] = tcp_server.do_accept();
-        fprintf(stderr, "ACCEPT!!!!!!!!\n");
-    }
+    std::vector<int> fds;
 
     void* buf = malloc(100);
     while (1) {
         fd_set readfds;
-        int max_fd = -1;
-        for (int i = 0; i < num_fds; ++i)
+        FD_ZERO(&readfds);
+
+        FD_SET(server_socket, &readfds);
+        int max_fd = server_socket;
+
+        for (int i = 0; i < fds.size(); ++i)
             max_fd = std::max(max_fd, fds[i]);
+
         if (max_fd < 0)
             break;
 
-        FD_ZERO(&readfds);
-        for (int i = 0; i < num_fds; ++i)
+        for (int i = 0; i < fds.size(); ++i)
             FD_SET(fds[i], &readfds);
         fprintf(stderr, "Before select\n");
         int activity = select(max_fd + 1, &readfds, NULL, NULL, NULL);
@@ -48,7 +36,14 @@ int main(int argc, char** argv) {
             continue;
         fprintf(stderr, "After select\n");
 
-        for (int i = 0; i < num_fds; ++i) {
+        if (FD_ISSET(server_socket, &readfds)) {
+            fprintf(stderr, "Can new connection\n");
+            int new_con = tcp_server.do_accept();
+            fds.push_back(new_con);
+            fprintf(stderr, "Receive new connection\n");
+        }
+
+        for (int i = 0; i < fds.size(); ++i) {
             if (FD_ISSET(fds[i], &readfds)) {
                 fprintf(stderr, "Before\n");
                 //read(fds[i], buf, 4000);

@@ -32,11 +32,13 @@ struct Pipe_Buffer{
 
     ssize_t do_read_to(void *buf, size_t size) {
         std::unique_lock<std::mutex> lock(mtx);
+        fprintf(stderr, "Read from pipe %d\n", size);
         return read(get_read_side(), buf, size);
     }
 
     ssize_t do_write_from(void *buf, size_t size) {
         std::unique_lock<std::mutex> lock(mtx);
+        fprintf(stderr, "Write to pipe %d\n", size);
         return write(get_write_side(), buf, size);
     }
 };

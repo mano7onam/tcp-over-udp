@@ -156,7 +156,7 @@ ssize_t TCP_Client::do_send(void *buf, size_t size) {
 }
 
 TCP_Client::~TCP_Client() {
-    fprintf(stderr, "Destructor server\n");
+    fprintf(stderr, "Destructor client\n");
     listen_flag = false;
     listen_thread->join();
     delete listen_thread;

@@ -17,33 +17,82 @@ TCP_Server::TCP_Server(int socket_fd) {
 
     listen_flag = false;
     listen_thread = NULL;
+
+    this->connections_creator = new Connections_Creator(socket_fd, &m_connections, &mtx_connections);
+}
+
+TCP_Server::TCP_Server(unsigned short port) {
+    socket_fd = 0;
+    struct sockaddr_in s_addr;
+
+    socket_fd = socket(PF_INET, SOCK_DGRAM, 0);
+
+    s_addr.sin_family = PF_INET;
+    s_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    unsigned short port_my = port;
+    while (1) {
+        s_addr.sin_port = htons(port_my);
+        if (0 == bind(socket_fd, (struct sockaddr *) &s_addr, sizeof(struct sockaddr_in)))
+            break;
+        ++port_my;
+    }
+
+    this->main_loop_thread = NULL;
+
+    pbuf = 0;
+    szbuf = CUSTOM_SERVER_BUFFER_SIZE;
+    buf = malloc(szbuf);
+
+    port_counter = 5000;
+
+    listen_flag = false;
+    listen_thread = NULL;
+
+    this->connections_creator = new Connections_Creator(socket_fd, &m_connections, &mtx_connections);
+}
+
+int TCP_Server::get_server_socket() {
+    return connections_creator->pipe_fd[0];
 }
 
 void background_send_receive_thread_function(TCP_Server *server) {
     bool have_send_data = false;
     while (server->listen_flag || have_send_data) {
         have_send_data = false;
-        if (server->connections.empty())
-            continue;
 
         struct timeval tv;
         fd_set readfds;
-        int max_fd = -1;
+        int max_fd;
         FD_ZERO(&readfds);
+
+        FD_SET(server->socket_fd, &readfds);
+        max_fd = server->socket_fd;
+
+        server->mtx_connections.lock();
         for (auto elem : server->connections) {
             Connection* con = elem.second;
             FD_SET(con->socket_fd, &readfds);
-            if (max_fd == -1 || max_fd < con->socket_fd)
+            if (max_fd < con->socket_fd)
                 max_fd = con->socket_fd;
         }
+        server->mtx_connections.unlock();
+
         if (-1 == max_fd)
             continue;
 
         tv = {0, CUSTOM_SELECT_TIMEOUT};
+        //fprintf(stderr, "Before select\n");
         int activity = select(max_fd + 1, &readfds, NULL, NULL, &tv);
+        //fprintf(stderr, "Activity: %d\n", activity);
         if (activity < 0)
             continue;
 
+        if (FD_ISSET(server->socket_fd, &readfds)) {
+            fprintf(stderr, "Have message for server socket\n");
+            server->connections_creator->do_receive_message();
+        }
+
+        server->mtx_connections.lock();
         for (auto elem : server->connections) {
             Connection* con = elem.second;
             if (FD_ISSET(con->socket_fd, &readfds)) {
@@ -64,6 +113,7 @@ void background_send_receive_thread_function(TCP_Server *server) {
                 }
             }
         }
+        server->mtx_connections.unlock();
     }
 }
 
@@ -72,7 +122,7 @@ void TCP_Server::do_listen() {
     listen_thread = new std::thread(background_send_receive_thread_function, this);
 }
 
-int TCP_Server::do_accept() {
+/*int TCP_Server::do_accept() {
     Connection* connection = NULL;
     socklen_t addr_size = sizeof(struct sockaddr_in);
     struct sockaddr_in addr;
@@ -106,6 +156,7 @@ int TCP_Server::do_accept() {
                                         CUSTOM_CONNECTION_SEND_BUFFER_SIZE,
                                         port_counter, addr);
             connection->set_his_port(his_port);
+            connection->flag_active = true;
         } catch(ConnectionException ex) {
             fprintf(stderr, "%s\n", ex.what());
             delete connection;
@@ -155,6 +206,23 @@ int TCP_Server::do_accept() {
     connections[connection->pipe_buffer_recv->get_read_side()] = connection;
     m_connections[Ip_Port(source_ip, source_port)] = connection->pipe_buffer_recv->get_read_side();
     return connection->pipe_buffer_recv->get_read_side();
+}*/
+
+int TCP_Server::do_accept() {
+    fprintf(stderr, "Call accept\n");
+    Connection* connection = connections_creator->get_connectoin_from_queue();
+    fprintf(stderr, "!!! Connection taken from creator\n");
+
+    mtx_connections.lock();
+    int pipe_read_side = connection->pipe_buffer_recv->get_read_side();
+    connections[pipe_read_side] = connection;
+    int con_ip = ntohl(connection->his_addr.sin_addr.s_addr);
+    unsigned short con_port = ntohs(connection->his_addr.sin_port);
+    m_connections[Ip_Port(con_ip, con_port)] = connection->socket_fd;
+    mtx_connections.unlock();
+
+    fprintf(stderr, "New connection has established\n");
+    return pipe_read_side;
 }
 
 ssize_t TCP_Server::do_recv(int socket_fd, void* buf, size_t size) {
@@ -190,5 +258,6 @@ TCP_Server::~TCP_Server() {
     delete listen_thread;
     for (auto elem : connections)
         delete elem.second;
+    delete connections_creator;
     free(buf);
 }
