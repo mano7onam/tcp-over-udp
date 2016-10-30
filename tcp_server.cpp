@@ -51,12 +51,12 @@ int TCP_Server::get_server_socket() {
     return connections_creator->pipe_fd[0];
 }
 
-int TCP_Server::delete_active_connection(int id_connection, std::string cause) {
+int TCP_Server::set_connection_not_active(int id_connection, std::string cause) {
     if (!connections.count(id_connection)) {
-        fprintf(stderr, "No such connection\n.");
+        //fprintf(stderr, "No such connection\n.");
         return -1;
     }
-    fprintf(stderr, "Close connection because: [%s]\n", cause.c_str());
+    //fprintf(stderr, "Close connection because: [%s]\n", cause.c_str());
     Connection* con = connections[id_connection];
     con->do_close_connection();
     return 1;
@@ -93,11 +93,12 @@ void background_send_receive_thread_function(TCP_Server *server) {
 
         tv = {0, CUSTOM_SELECT_TIMEOUT};
         int activity = select(max_fd + 1, &readfds, NULL, NULL, &tv);
+        //fprintf(stderr, "Activity: %d\n", activity);
         if (activity < 0)
             continue;
 
         if (FD_ISSET(server->socket_fd, &readfds)) {
-            fprintf(stderr, "Have message for server socket\n");
+            //fprintf(stderr, "Have message for server socket\n");
             server->connections_creator->do_receive_message();
         }
 
@@ -109,7 +110,7 @@ void background_send_receive_thread_function(TCP_Server *server) {
             if (FD_ISSET(con->socket_fd, &readfds)) {
                 ssize_t res = con->do_background_recv();
                 if (res == -1) {
-                    fprintf(stderr, "%s\n", "Error when receive to buffer");
+                    //fprintf(stderr, "%s\n", "Error when receive to buffer");
                     continue;
                 }
 
@@ -120,7 +121,7 @@ void background_send_receive_thread_function(TCP_Server *server) {
                     // todo shutdown mode
                 }
                 else if (res == -3) {
-                    fprintf(stderr, "%s\n", "Error when receive to buffer");
+                    //fprintf(stderr, "%s\n", "Error when receive to buffer");
                 }
             }
             else {
@@ -131,7 +132,7 @@ void background_send_receive_thread_function(TCP_Server *server) {
                     con->last_time_recv_message = current_time;
                 }
                 else if (diff_time > CUSTOM_RECEIVE_TIMEOUT) {
-                    server->delete_active_connection(elem.first, "Timeout");
+                    server->set_connection_not_active(elem.first, "Timeout");
                     continue;
                 }
             }
@@ -143,10 +144,13 @@ void background_send_receive_thread_function(TCP_Server *server) {
                 con->last_time_send_message = current_time;
                 ssize_t res = con->do_background_send(0);
                 if (res < 0) {
-                    fprintf(stderr, "%s\n", "Error when send from buffer");
+                    //fprintf(stderr, "%s\n", "Error when send from buffer");
                 }
                 else if (res == 0 && con->is_closed_me) {
-                    server->delete_active_connection(elem.first, "Closed me");
+                    server->set_connection_not_active(elem.first, "Closed me");
+                }
+                else if (res > 0){
+                    have_send_data = true;
                 }
             }
         }
@@ -159,10 +163,10 @@ void TCP_Server::do_listen() {
     listen_thread = new std::thread(background_send_receive_thread_function, this);
 }
 
-int TCP_Server::do_accept() {
-    fprintf(stderr, "Call accept\n");
+int TCP_Server::do_accept(struct sockaddr_in & addr) {
+    //fprintf(stderr, "Call accept\n");
     Connection* connection = connections_creator->get_connectoin_from_queue();
-    fprintf(stderr, "!!! Connection taken from creator\n");
+    //fprintf(stderr, "!!! Connection taken from creator\n");
 
     mtx_connections.lock();
     int pipe_read_side = connection->pipe_buffer_recv->get_read_side();
@@ -174,14 +178,15 @@ int TCP_Server::do_accept() {
     connection->ip_port_id = ip_port_id;
     mtx_connections.unlock();
 
-    fprintf(stderr, "New connection has established\n");
+    //fprintf(stderr, "New connection has established\n");
+    addr = connection->his_addr;
     return pipe_read_side;
 }
 
 ssize_t TCP_Server::do_recv(int socket_fd, void* buf, size_t size) {
     std::unique_lock<std::mutex> lock_connections(mtx_connections);
     if (!connections.count(socket_fd)) {
-        fprintf(stderr, "%s\n", "No such socket descriptor in connections.");
+        //fprintf(stderr, "%s\n", "No such socket descriptor in connections.");
         return -1;
     }
     Connection* con = connections[socket_fd];
@@ -200,13 +205,13 @@ ssize_t TCP_Server::do_recv(int socket_fd, void* buf, size_t size) {
 ssize_t TCP_Server::do_send(int socket_fd, void* buf, size_t size) {
     std::unique_lock<std::mutex> lock_connections(mtx_connections);
     if (!connections.count(socket_fd)) {
-        fprintf(stderr, "%s\n", "No such socket descriptor in connections.");
+        //fprintf(stderr, "%s\n", "No such socket descriptor in connections.");
         return -1;
     }
     Connection* con = connections[socket_fd];
 
     if (con->is_closed_me || con->is_closed_he) {
-        fprintf(stderr, "Connections is closed.\n");
+        //fprintf(stderr, "Connections is closed.\n");
         return -1;
     }
 
@@ -221,7 +226,7 @@ ssize_t TCP_Server::do_send(int socket_fd, void* buf, size_t size) {
 int TCP_Server::do_close(int socket_fd) {
     std::unique_lock<std::mutex> lock_connections(mtx_connections);
     if (!connections.count(socket_fd)) {
-        fprintf(stderr, "%s\n", "No such socket descriptor in connections.");
+        //fprintf(stderr, "%s\n", "No such socket descriptor in connections.");
         return -1;
     }
     Connection* con = connections[socket_fd];
@@ -230,7 +235,7 @@ int TCP_Server::do_close(int socket_fd) {
 }
 
 TCP_Server::~TCP_Server() {
-    fprintf(stderr, "Destructor server\n");
+    //fprintf(stderr, "Destructor server\n");
     listen_flag = false;
     listen_thread->join();
     delete listen_thread;

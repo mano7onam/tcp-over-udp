@@ -1,4 +1,4 @@
-#include "tcp_server.h"
+#include "../tcp_server.h"
 
 #define PORT 4444
 #define IP_ADDRESS "localhost"

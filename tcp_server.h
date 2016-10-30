@@ -30,13 +30,13 @@ struct TCP_Server {
 
     TCP_Server(unsigned short port);
 
-    int delete_active_connection(int id_connection, std::string cause);
+    int set_connection_not_active(int id_connection, std::string cause);
 
     int get_server_socket(); // return pipe to select support accept
 
     void do_listen();
 
-    int do_accept();
+    int do_accept(struct sockaddr_in & addr);
 
     ssize_t do_recv(int socket_fd, void* buf, size_t size);
 

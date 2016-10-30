@@ -49,7 +49,7 @@ Connection::Connection(int size_tmp_buf, int size_recv_buf, int size_send_buf,
             break;
         ++my_port;
     }
-    fprintf(stderr, "Result port: %d\n", my_port);
+    //fprintf(stderr, "Result port: %d\n", my_port);
 
     is_closed_me = false;
     is_closed_he = false;
@@ -59,6 +59,7 @@ Connection::Connection(int size_tmp_buf, int size_recv_buf, int size_send_buf,
 void Connection::do_close_connection() {
     is_active = false;
     pipe_buffer_recv->do_write_from(tmp_buf, 4);
+    cv_send.notify_one();
 }
 
 int get_int_from_buffer(void* buf, int offs) {
@@ -73,24 +74,21 @@ void push_int_to_buffer(int val, void* buf, int offs) {
 ssize_t Connection::do_background_recv() {
     sockaddr_in addr;
     bzero(&addr, sizeof(struct sockaddr_in));
-    ssize_t size = recvfrom(socket_fd, tmp_buf, sz_tmp_buf, 0, (struct sockaddr *) &addr, &addr_size);
-    fprintf(stderr, "Size recv: %ld\n", size);
+    ssize_t size = recvfrom(socket_fd, tmp_buf, (size_t)sz_tmp_buf, 0, (struct sockaddr *) &addr, &addr_size);
+    //fprintf(stderr, "Size recv: %ld\n", size);
     if (size < 20) {
-        fprintf(stderr, "Error size: %ld\n", size);
+        //fprintf(stderr, "Error size: %ld\n", size);
         return -1;
     }
 
-    for (int i = 0; i < 5; ++i) {
-        fprintf(stderr, "re %d ", ((int*)tmp_buf)[i]);
-    }
-
     int type_recv = get_int_from_buffer(tmp_buf, 0);
+    //fprintf(stderr, "Type recv: %d\n", type_recv);
     if (type_recv == -2) {
-        fprintf(stderr, "Receive shutdown connection signal\n");
+        //fprintf(stderr, "Receive shutdown connection signal\n");
         return -2; // signal to close receive side connection
     }
     else if (type_recv == -3) {
-        fprintf(stderr, "Receive close connection signal\n");
+        //fprintf(stderr, "Receive close connection signal\n");
         is_closed_he = true;
         return -3; // signal to close all connection
     }
@@ -98,12 +96,14 @@ ssize_t Connection::do_background_recv() {
     // check information about delivery sent messages
     int r_send_message_number = get_int_from_buffer(tmp_buf, 4);
     int r_send_message_size = get_int_from_buffer(tmp_buf, 8);
+
+    //fprintf(stderr, "%d %d %d\n", type_recv, r_send_message_number, r_send_message_size);
     if (r_send_message_number == send_message_number) {
         std::unique_lock<std::mutex> lock(mtx_send);
-        fprintf(stderr, "Message number: %d\n", r_send_message_number);
-        fprintf(stderr, "Last message size: %d\n", r_send_message_size);
+        //fprintf(stderr, "Message number: %d\n", r_send_message_number);
+        //fprintf(stderr, "Last message size: %d\n", r_send_message_size);
         send_buf->move_buffer(r_send_message_size);
-        fprintf(stderr, "Size buffer: %d\n", send_buf->get_size());
+        //fprintf(stderr, "Size buffer: %d\n", send_buf->get_size());
         ++send_message_number;
     }
 
@@ -118,10 +118,10 @@ ssize_t Connection::do_background_recv() {
     }
     if (r_recv_message_number == recv_message_number && r_recv_message_size > 0) {
         if (size < 20 + r_recv_message_size) {
-            fprintf(stderr, "Error format receive... R_recv_message: %d\n", r_recv_message_number);
+            //fprintf(stderr, "Error format receive... R_recv_message: %d\n", r_recv_message_number);
             return -1;
         }
-        fprintf(stderr, "Have data number %d, size %d\n", r_recv_message_number, r_recv_message_size);
+        //fprintf(stderr, "Have data number %d, size %d\n", r_recv_message_number, r_recv_message_size);
 
         ssize_t size_write = pipe_buffer_recv->do_write_from((void *) ((char *) tmp_buf + 20), r_recv_message_size);
 
@@ -136,7 +136,7 @@ ssize_t Connection::do_background_recv() {
 
 ssize_t Connection::do_background_send(int type_send) {
     // send type send int value have control flags...
-    fprintf(stderr, "Send type: %d\n", type_send);
+    //fprintf(stderr, "Send type: %d\n", type_send);
     push_int_to_buffer(type_send, tmp_buf, 0);
 
     // send information about delivery message from
@@ -146,25 +146,28 @@ ssize_t Connection::do_background_send(int type_send) {
 
     // if datagram have data receive it
     std::unique_lock<std::mutex> lock(mtx_send);
-    size_t size_sent_data = 0;
+    int size_sent_data = 0;
 
     if (!(send_buf->is_empty())) {
-        size_sent_data = send_buf->get_data((void*)((char*)tmp_buf + 20), 200, false);
+        size_sent_data = send_buf->get_data((void*)((char*)tmp_buf + 20), CUSTOM_CONNECTION_TMP_BUFFER_SIZE - 21, false);
         push_int_to_buffer(send_message_number, tmp_buf, 12);
         push_int_to_buffer(size_sent_data, tmp_buf, 16);
+        if (size_sent_data) {
+            cv_send.notify_one();
+        }
     }
     else {
         push_int_to_buffer(-1, tmp_buf, 12);
         push_int_to_buffer(-1, tmp_buf, 16);
+        cv_send.notify_one();
     }
 
-    for (int i = 0; i < 5; ++i) {
-        fprintf(stderr, "se %d ", ((int*)tmp_buf)[i]);
-    }
-    fprintf(stderr, "\n");
+    //fprintf(stderr, "%d %d %d %d %d\n", type_send, recv_message_number - 1, last_recv_message_size,
+    //       send_message_number, size_sent_data);
     //fprintf(stderr, "Background send size data: %d, num data: %d\n", size_sent_data, send_message_number);
     ssize_t result = sendto(socket_fd, tmp_buf, 20 + size_sent_data, 0,
                         (struct sockaddr *) &(his_addr), sizeof(struct sockaddr_in));
+    //fprintf(stderr, "Sent successfully\n");
 
     if (result < 0)
         perror("Background send");

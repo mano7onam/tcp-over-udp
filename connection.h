@@ -49,6 +49,7 @@ struct Connection {
     bool is_closed_me;
     bool is_closed_he;
     bool is_active;
+    bool can_delete;
 
     void do_close_connection();
 

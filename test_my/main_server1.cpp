@@ -2,7 +2,7 @@
 // Created by mano on 28.10.16.
 //
 
-#include "tcp_server.h"
+#include "../tcp_server.h"
 
 #define PORT 4444
 
@@ -45,6 +45,7 @@ int main(int argc, char** argv) {
 
         for (int i = 0; i < fds.size(); ++i) {
             if (FD_ISSET(fds[i], &readfds)) {
+                exit(0);
                 fprintf(stderr, "Before\n");
                 //read(fds[i], buf, 4000);
                 fprintf(stderr, "After\n");
@@ -57,6 +58,9 @@ int main(int argc, char** argv) {
                 ((char*)buf)[size + 1] = '\0';
                 fprintf(stderr, "[%d]: ", i);
                 fprintf(stderr, "Size: %d, Message: %s\n", size, (char*)buf);
+
+                char message[25] = "qwertyuiopasdfghjklzxcvb";
+                size = tcp_server.do_send(fds[i], message, 25);
             }
         }
     }

@@ -21,6 +21,7 @@ struct TCP_Client {
     int socket_fd = -1;
     std::thread* main_loop_thread = NULL;
     Connection* connection = NULL;
+    std::mutex mtx_connection;
 
     std::mutex mtx_accept1;
     std::mutex mtx_accept2;
@@ -41,6 +42,8 @@ struct TCP_Client {
     TCP_Client(unsigned short port);
 
     int do_connect(std::string ip_addr, unsigned short port);
+
+    int set_connection_not_active(std::string cause);
 
     ssize_t do_recv(void* buf, size_t size);
 

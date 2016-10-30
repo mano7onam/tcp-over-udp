@@ -12,6 +12,8 @@
 #include <sys/types.h>
 #include <sys/time.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
+#include <signal.h>
 #include <netdb.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -36,7 +38,7 @@ typedef std::pair<int, unsigned short> Ip_Port;
 #define CUSTOM_CONNECTION_SEND_BUFFER_SIZE 8388608
 
 // microsecounds:
-#define CUSTOM_PERIOD_SEND_DATA 1000
+#define CUSTOM_PERIOD_SEND_DATA 10
 #define CUSTOM_SELECT_TIMEOUT 3000000
 #define CUSTOM_RECEIVE_TIMEOUT 10000000
 

@@ -33,23 +33,25 @@ public:
 
     int push_data(void* source_buf, int size) {
         int can_push = std::min(get_rest_capacity(), size);
+        if (can_push < 0)
+            return -1;
         if (can_push == 0)
             return 0;
-        memcpy(get_start(), source_buf, can_push);
+        memcpy(get_start(), source_buf, (size_t)can_push);
         move_pointer(can_push);
         return can_push;
     }
 
     void move_buffer(int size) {
-        if (size > sz)
+        if (size >= sz)
             return;
-        memmove(buf, (void*)((char*)buf + size), sz - size);
+        memmove(buf, (void*)((char*)buf + size), (size_t)(sz - size));
         p -= size;
     }
 
     int get_data(void* dest_buf, int want_take, bool flag_move) {
         int can_give = std::min(p, want_take);
-        memcpy(dest_buf, buf, can_give);
+        memcpy(dest_buf, buf, (size_t)can_give);
         if (flag_move)
             move_buffer(can_give);
         return can_give;

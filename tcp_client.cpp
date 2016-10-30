@@ -39,15 +39,29 @@ TCP_Client::TCP_Client(unsigned short port) {
     listen_thread = NULL;
 }
 
+int TCP_Client::set_connection_not_active(std::string cause) {
+        fprintf(stderr, "Close connection because: [%s]\n", cause.c_str());
+    connection->do_close_connection();
+    listen_flag = false;
+    return 1;
+}
+
 void background_send_receive_thread_function(TCP_Client *client) {
-    while (client->listen_flag) {
+    bool have_send_data = false;
+    while (client->listen_flag || have_send_data) {
+        have_send_data = false;
+
         // for work with time
         struct timeval tv;
+        int current_time;
+        int diff_time;
 
         fd_set readfds;
         int max_fd = -1;
         FD_ZERO(&readfds);
         Connection* con = client->connection;
+        if (NULL == con)
+            break;
         FD_SET(con->socket_fd, &readfds);
 
         if (max_fd < con->socket_fd)
@@ -57,26 +71,59 @@ void background_send_receive_thread_function(TCP_Client *client) {
 
         tv = {0, CUSTOM_SELECT_TIMEOUT};
         int activity = select(max_fd + 1, &readfds, NULL, NULL, &tv);
+        //fprintf(stderr, "Activity: %d\n", activity);
         if (activity < 0)
             continue;
 
+        client->mtx_connection.lock();
         if (FD_ISSET(con->socket_fd, &readfds)) {
+            //fprintf(stderr, "BEFOREEEE BACKGR\n");
             ssize_t res = con->do_background_recv();
-            if (res < 0) {
+            //fprintf(stderr, "AFTER BACKGR\n");
+            if (res == -1) {
                 fprintf(stderr, "%s\n", "Error when receive to buffer");
+            }
+
+            gettimeofday(&tv, NULL);
+            current_time = (int)tv.tv_usec + (int)tv.tv_sec * 1000000;
+            con->last_time_recv_message = current_time;
+            if (res == -2) {
+                // todo shutdown mode
+            }
+            else if (res == -3) {
+                fprintf(stderr, "%s\n", "Error when receive to buffer");
+            }
+        }
+        else {
+            gettimeofday(&tv, NULL);
+            current_time = (int)tv.tv_usec + (int)tv.tv_sec * 1000000;
+            diff_time = abs(current_time - con->last_time_recv_message);
+            if (con->last_time_recv_message == 0 || con->last_time_recv_message > current_time) {
+                con->last_time_recv_message = current_time;
+            }
+            else if (diff_time > CUSTOM_RECEIVE_TIMEOUT) {
+                client->set_connection_not_active("Timeout");
+                continue;
             }
         }
 
         gettimeofday(&tv, NULL);
-        int current_time = (int)tv.tv_usec + (int)tv.tv_sec * 1000000;
-        int diff_time = abs(current_time - con->last_time_send_message);
+        current_time = (int)tv.tv_usec + (int)tv.tv_sec * 1000000;
+        diff_time = abs(current_time - con->last_time_send_message);
         if (diff_time > CUSTOM_PERIOD_SEND_DATA) {
             con->last_time_send_message = current_time;
             ssize_t res = con->do_background_send(0);
             if (res < 0) {
                 fprintf(stderr, "%s\n", "Error when send from buffer");
             }
+            else if (res == 0 && con->is_closed_me) {
+                client->set_connection_not_active("Closed me");
+            }
+            else if (res > 0){
+                have_send_data = true;
+            }
         }
+        client->mtx_connection.unlock();
     }
 }
 
@@ -132,6 +179,7 @@ int TCP_Client::do_connect(std::string ip_addr, unsigned short port) {
             continue;
 
         int size = recvfrom(socket_fd, buf, CUSTOM_BUFFER_SIZE, 0, (struct sockaddr *) &addr, &addr_size);
+        fprintf(stderr, "Size: %d\n", size);
         if (size < 4) {
             fprintf(stderr, "Size of package must be greater than 4\n");
             continue;
@@ -168,29 +216,37 @@ int TCP_Client::do_connect(std::string ip_addr, unsigned short port) {
 }
 
 ssize_t TCP_Client::do_recv(void *buf, size_t size) {
-    std::unique_lock<std::mutex> lock(connection->mtx_recv);
-    while (connection->recv_buf->is_empty()) {
-        connection->cv_recv.wait(lock);
+    std::unique_lock<std::mutex> lock_connections(mtx_connection);
+    if (!connection->is_active) {
+        listen_flag = false;
+        return 0;
     }
 
-    //int res_size = connection->recv_buf->get_data(buf, size, true);
-
+    //fprintf(stderr, "BEFOREEEEEEEEEEEEEEEEEEEEEEE\n");
     ssize_t res_size = connection->pipe_buffer_recv->do_read_to(buf, size);
+    //fprintf(stderr, "AFTERRRRRRRRRRRRRRRRRRRRRRRRRRR\n");
 
     return res_size;
 }
 
 ssize_t TCP_Client::do_send(void *buf, size_t size) {
-    fprintf(stderr, "do_send aaa\n");
     std::unique_lock<std::mutex> lock(connection->mtx_send);
-    fprintf(stderr, "do_send bbb\n");
-    while (connection->send_buf->is_full()) {
-        fprintf(stderr, "do_send ccc\n");
-        connection->cv_send.wait(lock);
+
+    if (connection->is_closed_me || connection->is_closed_he) {
+        fprintf(stderr, "Connections is closed.\n");
+        return -1;
     }
 
-    fprintf(stderr, "bbb\n");
-    return connection->send_buf->push_data(buf, size);
+    while (connection->send_buf->is_full() && connection->is_active) {
+        connection->cv_send.wait(lock);
+    }
+    if (!connection->is_active) {
+        listen_flag = false;
+        return 0;
+    }
+
+    int pushed = connection->send_buf->push_data(buf, size);
+    return pushed;
 }
 
 TCP_Client::~TCP_Client() {
