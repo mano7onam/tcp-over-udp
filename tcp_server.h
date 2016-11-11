@@ -11,13 +11,11 @@
 
 struct TCP_Server {
     int socket_fd;
-    std::thread* main_loop_thread;
 
     std::map<int, Connection*> connections;
     std::map<Ip_Port, int> m_connections;
-    std::mutex mtx_connections;
 
-    std::mutex mtx_close_connections;
+    std::mutex mtx_connections;
     std::condition_variable cv_close_connections;
 
     void* buf;
@@ -28,8 +26,6 @@ struct TCP_Server {
     std::thread* listen_thread;
 
     Connections_Creator *connections_creator;
-
-    /*TCP_Server(int socket_fd); // it receive ready udp socket*/
 
     TCP_Server(unsigned short port);
 

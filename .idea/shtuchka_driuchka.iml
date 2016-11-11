@@ -3,10 +3,10 @@
   <component name="NewModuleRootManager">
     <content url="file://$MODULE_DIR$">
       <sourceFolder url="file://$MODULE_DIR$/tcp_server.cpp" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/connections_creator.h" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/test_file_transfer/server.cpp" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/connections_creator.cpp" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/test_speed_tester/speed_server.cpp" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/global_definitions.h" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/connections_creator.h" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/tcp_client.cpp" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/CMakeLists.txt" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/tcp_client.h" isTestSource="false" />

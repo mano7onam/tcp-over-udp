@@ -75,15 +75,13 @@ void background_send_receive_thread_function(TCP_Client *client) {
 
         tv = {0, CUSTOM_SELECT_TIMEOUT};
         int activity = select(max_fd + 1, &readfds, NULL, NULL, &tv);
-        //fprintf(stderr, "Activity: %d\n", activity);
-        if (activity < 0)
+        if (activity < 0) {
             continue;
+        }
 
         client->mtx_connection.lock();
         if (FD_ISSET(con->socket_fd, &readfds)) {
-            //fprintf(stderr, "BEFOREEEE BACKGR\n");
             ssize_t res = con->do_background_recv();
-            //fprintf(stderr, "AFTER BACKGR\n");
             if (res == -1) {
                 fprintf(stderr, "%s\n", "Error when receive to buffer");
             }
@@ -116,7 +114,7 @@ void background_send_receive_thread_function(TCP_Client *client) {
         diff_time = abs(current_time - con->last_time_send_message);
         if (diff_time > CUSTOM_PERIOD_SEND_DATA) {
             con->last_time_send_message = current_time;
-            ssize_t res = con->do_background_send(0);
+            ssize_t res = con->do_background_send(SEND_WITH_DATA);
             if (res < 0) {
                 fprintf(stderr, "%s\n", "Error when send from buffer");
             }
@@ -216,7 +214,6 @@ int TCP_Client::do_connect(std::string ip_addr, unsigned short port) {
     listen_flag = true;
     listen_thread = new std::thread(background_send_receive_thread_function, this);
 
-    //return connection->pipe_fd[0];
     return connection->pipe_buffer_recv->get_read_side();
 }
 
@@ -227,36 +224,26 @@ ssize_t TCP_Client::do_recv(void *buf, size_t size) {
         return 0;
     }
 
-    //fprintf(stderr, "BEFOREEEEEEEEEEEEEEEEEEEEEEE\n");
     ssize_t res_size = connection->pipe_buffer_recv->do_read_to(buf, size);
-    //fprintf(stderr, "AFTERRRRRRRRRRRRRRRRRRRRRRRRRRR\n");
-
     return res_size;
 }
 
 ssize_t TCP_Client::do_send(void *buf, size_t size) {
-    /*if (connection == NULL)
-        perror("aaa");*/
-    //bool bbb = connection->is_active;
-    //fprintf(stderr, "sa\n");
     std::unique_lock<std::mutex> lock(connection->mtx_send);
-    //fprintf(stderr, "sb\n");
 
     if (connection->is_closed_me || connection->is_closed_he) {
         fprintf(stderr, "Connections is closed.\n");
         return -1;
     }
-    //fprintf(stderr, "sc\n");
 
     while (connection->send_buf->is_full() && connection->is_active) {
         connection->cv_send.wait(lock);
     }
-    //fprintf(stderr, "sd\n");
+
     if (!connection->is_active) {
         listen_flag = false;
         return 0;
     }
-    //fprintf(stderr, "se\n");
 
     int pushed = connection->send_buf->push_data(buf, size);
     return pushed;

@@ -46,4 +46,11 @@ typedef std::pair<int, unsigned short> Ip_Port;
 
 #define CUSTOM_SIZE_CONNECTIONS_QUEUE 10
 
+#define SEND_WITH_DATA 0
+#define SEND_ONLY_ACK 1
+
+#define SIZE_PIPE_BUFFER_LIMIT 10000
+
+#define SECOUND_TO_USEC 1000000
+
 #endif //PRJ_INCLUDES_H

@@ -507,49 +507,48 @@ int main(int argc, char *argv[])
                 connections.push_back(new ConnectionTransfer(tcp_server, new_socket));
             }
         }
-        //fprintf(stderr, "After accepts\n");
 
-        for (int i = 0; i < connections.size(); ++i){
+        for (int i = 0; i < connections.size(); ++i) {
             if (connections[i] == NULL)
                 continue;
 
             if (FD_ISSET(connections[i]->csocket, &readfds)) {
-                //fprintf(stderr, "Doing socket: %d\n", i);
                 int res = connections[i]->recv_to_buf();
-                //fprintf(stderr, "Done socket: %d\n", i);
-                if (res <= 0){
-                    if (res < 0) {
-                        perror("!!!!!!!!!!!!!!!!!!!!!!!!!! receive");
-                        continue;
-                    }
-                    //fprintf(stderr, "Some error\n");
-
-                    while ((res = connections[i]->do_what_state()) != 1) {
-                        //fprintf(stderr, "In while %d\n", connections[i]->pbuf);
-                        if (res == -1) {
+                if (res == 0) {
+                    bool all_good = true;
+                    int res_do_what_state;
+                    while ((res_do_what_state = connections[i]->do_what_state()) != 1) {
+                        if (res_do_what_state == -1) {
                             close_connection_incorrect(i);
+                            all_good = false;
+                            break;
                         }
                     }
-
-                    close_connectoin_correct(i);
+                    if (all_good) {
+                        close_connectoin_correct(i);
+                    }
+                    continue;
+                }
+                else if (res < 0) {
+                    close_connection_incorrect(i);
                     continue;
                 }
             }
-            //fprintf(stderr, "After sockets\n");
 
             bool is_data_receiving = connections[i]->is_file_data_receive_state();
             if (is_data_receiving && FD_ISSET(connections[i]->fd, &readfds) || !is_data_receiving)
             {
-                //fprintf(stderr, "Doing file: %d\n", i);
                 int res = connections[i]->do_what_state();
-                //fprintf(stderr, "Done file: %d\n", i);
 
-                if (res == -1 || connections[i]->state == RECV_ERR_STOP)
+                if (res == -1 || connections[i]->state == RECV_ERR_STOP) {
                     close_connection_incorrect(i);
-                if (connections[i]->state == RECV_STOP)
+                    continue;
+                }
+                if (connections[i]->state == RECV_STOP) {
                     close_connection_incorrect(i);
+                    continue;
+                }
             }
-            //fprintf(stderr, "After files\n");
         }
     }
 
