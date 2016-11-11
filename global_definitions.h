@@ -10,6 +10,7 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/time.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -17,6 +18,7 @@
 #include <netdb.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <dirent.h>
 #include <thread>
 #include <mutex>
 #include <condition_variable>
@@ -34,8 +36,8 @@ typedef std::pair<int, unsigned short> Ip_Port;
 // cuttom sizes buffers:
 #define CUSTOM_SERVER_BUFFER_SIZE 1024
 #define CUSTOM_CONNECTION_TMP_BUFFER_SIZE 1024
-#define CUSTOM_CONNECTION_RECV_BUFFER_SIZE 8388608
-#define CUSTOM_CONNECTION_SEND_BUFFER_SIZE 8388608
+#define CUSTOM_CONNECTION_RECV_BUFFER_SIZE 1000
+#define CUSTOM_CONNECTION_SEND_BUFFER_SIZE 1000
 
 // microsecounds:
 #define CUSTOM_PERIOD_SEND_DATA 10

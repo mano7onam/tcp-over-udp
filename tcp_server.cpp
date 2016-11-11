@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include "tcp_server.h"
 
-TCP_Server::TCP_Server(int socket_fd) {
+/*TCP_Server::TCP_Server(int socket_fd) {
     this->socket_fd = socket_fd;
     this->main_loop_thread = NULL;
 
@@ -17,7 +17,10 @@ TCP_Server::TCP_Server(int socket_fd) {
     listen_thread = NULL;
 
     this->connections_creator = new Connections_Creator(socket_fd, &m_connections, &mtx_connections);
-}
+
+    flag_set = false;
+
+}*/
 
 TCP_Server::TCP_Server(unsigned short port) {
     socket_fd = 0;
@@ -53,10 +56,10 @@ int TCP_Server::get_server_socket() {
 
 int TCP_Server::set_connection_not_active(int id_connection, std::string cause) {
     if (!connections.count(id_connection)) {
-        //fprintf(stderr, "No such connection\n.");
+        fprintf(stderr, "No such connection\n.");
         return -1;
     }
-    //fprintf(stderr, "Close connection because: [%s]\n", cause.c_str());
+    fprintf(stderr, "Close connection because: [%s]\n", cause.c_str());
     Connection* con = connections[id_connection];
     con->do_close_connection();
     return 1;
@@ -77,42 +80,75 @@ void background_send_receive_thread_function(TCP_Server *server) {
         FD_SET(server->socket_fd, &readfds);
         max_fd = server->socket_fd;
 
-        server->mtx_connections.lock();
-        for (auto elem : server->connections) {
-            Connection* con = elem.second;
-            if (!con->is_active)
+        auto elem = server->connections.begin();
+        while (elem != server->connections.end()) {
+            Connection* con = elem->second;
+            if (con->is_ready_to_delete()) {
+                server->mtx_connections.lock();
+                server->connections.erase(elem++);
+                server->m_connections.erase(con->ip_port_id);
+                server->mtx_connections.unlock();
+                delete con;
+                server->cv_close_connections.notify_one();
                 continue;
-            FD_SET(con->socket_fd, &readfds);
-            if (max_fd < con->socket_fd)
-                max_fd = con->socket_fd;
-        }
-        server->mtx_connections.unlock();
+            }
+            if (!con->is_active || !con->is_accepted()) {
+                ++elem;
+                continue;
+            }
+            if (!con->is_accepted()) {
+                fprintf(stderr, "Not accepted\n");
+            }
 
-        if (-1 == max_fd)
-            continue;
+            FD_SET(con->socket_fd, &readfds);
+            con->flag_set = true;
+            if (max_fd < con->socket_fd) {
+                max_fd = con->socket_fd;
+            }
+
+            ++elem;
+            /*FD_SET(con->pipe_buffer_recv->pipe_fd[1], &readfds);
+            //fprintf(stderr, "all set\n");
+            if (max_fd < con->pipe_buffer_recv->pipe_fd[1]) {
+                max_fd = con->pipe_buffer_recv->pipe_fd[1];
+            }*/
+        }
 
         tv = {0, CUSTOM_SELECT_TIMEOUT};
         int activity = select(max_fd + 1, &readfds, NULL, NULL, &tv);
         //fprintf(stderr, "Activity: %d\n", activity);
-        if (activity < 0)
+        if (activity < 0) {
             continue;
-
-        if (FD_ISSET(server->socket_fd, &readfds)) {
-            //fprintf(stderr, "Have message for server socket\n");
-            server->connections_creator->do_receive_message();
         }
 
-        server->mtx_connections.lock();
+        if (FD_ISSET(server->socket_fd, &readfds)) {
+            fprintf(stderr, "Have message for server socket\n");
+            server->mtx_connections.lock();
+            server->connections_creator->do_receive_message();
+            server->mtx_connections.unlock();
+        }
+
         for (auto elem : server->connections) {
             Connection* con = elem.second;
-            if (!con->is_active)
+
+            if (!con->is_active || !con->flag_set) {
+                fprintf(stderr, "Continue\n");
                 continue;
-            if (FD_ISSET(con->socket_fd, &readfds)) {
+            }
+            con->flag_set = false;
+
+            int aaa = FD_ISSET(con->socket_fd, &readfds);
+            //int bbb = con->pipe_buffer_recv->get_size_pipe_buf() < 10000;
+            //int bbb = FD_ISSET(con->pipe_buffer_recv->pipe_fd[1], &readfds);
+            //fprintf(stderr, "OOO: %d %d\n", aaa, bbb);
+            if (aaa/* && bbb*/) {
+                //fprintf(stderr, "All good\n");
                 ssize_t res = con->do_background_recv();
                 if (res == -1) {
-                    //fprintf(stderr, "%s\n", "Error when receive to buffer");
+                    fprintf(stderr, "%s\n", "Error when receive to buffer");
                     continue;
                 }
+                //fprintf(stderr, "Res: %d\n", res);
 
                 gettimeofday(&tv, NULL);
                 current_time = (int)tv.tv_usec + (int)tv.tv_sec * 1000000;
@@ -121,7 +157,7 @@ void background_send_receive_thread_function(TCP_Server *server) {
                     // todo shutdown mode
                 }
                 else if (res == -3) {
-                    //fprintf(stderr, "%s\n", "Error when receive to buffer");
+                    fprintf(stderr, "%s\n", "Error when receive to buffer");
                 }
             }
             else {
@@ -141,10 +177,11 @@ void background_send_receive_thread_function(TCP_Server *server) {
             current_time = (int)tv.tv_usec + (int)tv.tv_sec * 1000000;
             diff_time = abs(current_time - con->last_time_send_message);
             if (diff_time > CUSTOM_PERIOD_SEND_DATA) {
+                //fprintf(stderr, "Send ack\n");
                 con->last_time_send_message = current_time;
                 ssize_t res = con->do_background_send(0);
                 if (res < 0) {
-                    //fprintf(stderr, "%s\n", "Error when send from buffer");
+                    fprintf(stderr, "%s\n", "Error when send from buffer");
                 }
                 else if (res == 0 && con->is_closed_me) {
                     server->set_connection_not_active(elem.first, "Closed me");
@@ -154,7 +191,6 @@ void background_send_receive_thread_function(TCP_Server *server) {
                 }
             }
         }
-        server->mtx_connections.unlock();
     }
 }
 
@@ -164,9 +200,10 @@ void TCP_Server::do_listen() {
 }
 
 int TCP_Server::do_accept(struct sockaddr_in & addr) {
-    //fprintf(stderr, "Call accept\n");
+    fprintf(stderr, "Call accept\n");
     Connection* connection = connections_creator->get_connectoin_from_queue();
-    //fprintf(stderr, "!!! Connection taken from creator\n");
+    connection->do_set_accepted(); // set flag that user has received this connection
+    fprintf(stderr, "!!! Connection taken from creator\n");
 
     mtx_connections.lock();
     int pipe_read_side = connection->pipe_buffer_recv->get_read_side();
@@ -178,27 +215,36 @@ int TCP_Server::do_accept(struct sockaddr_in & addr) {
     connection->ip_port_id = ip_port_id;
     mtx_connections.unlock();
 
-    //fprintf(stderr, "New connection has established\n");
+    fprintf(stderr, "New connection has established\n");
     addr = connection->his_addr;
     return pipe_read_side;
 }
 
 ssize_t TCP_Server::do_recv(int socket_fd, void* buf, size_t size) {
+    //fprintf(stderr, "Before lock connections\n");
     std::unique_lock<std::mutex> lock_connections(mtx_connections);
+    //fprintf(stderr, "After lock connections\n");
+
     if (!connections.count(socket_fd)) {
-        //fprintf(stderr, "%s\n", "No such socket descriptor in connections.");
+        fprintf(stderr, "%s\n", "No such socket descriptor in connections.");
         return -1;
     }
-    Connection* con = connections[socket_fd];
 
+    Connection* con = connections[socket_fd];
     if (!con->is_active) {
-        connections.erase(socket_fd);
-        m_connections.erase(con->ip_port_id);
-        delete con;
+        con->do_set_ready_to_delete();
         return 0;
     }
 
+    //fprintf(stderr, "Before read from pipe buffer\n");
     ssize_t res_size = con->pipe_buffer_recv->do_read_to(buf, size);
+    /*if (res_size >= 0) {
+        char data[10000];
+        memcpy(data, buf, res_size);
+        data[res_size] = '\0';
+        fprintf(stderr, "Data: %s\n", data);
+    }*/
+    //fprintf(stderr, "After read from pipe buffer\n");
     return res_size;
 }
 
@@ -230,7 +276,10 @@ int TCP_Server::do_close(int socket_fd) {
         return -1;
     }
     Connection* con = connections[socket_fd];
-    con->is_closed_me = true;
+    con->do_set_ready_to_delete();
+    while (connections.count(socket_fd)) {
+        cv_close_connections.wait(lock_connections);
+    }
     return 1;
 }
 
@@ -239,8 +288,9 @@ TCP_Server::~TCP_Server() {
     listen_flag = false;
     listen_thread->join();
     delete listen_thread;
-    for (auto elem : connections)
+    for (auto elem : connections) {
         delete elem.second;
+    }
     delete connections_creator;
     free(buf);
 }

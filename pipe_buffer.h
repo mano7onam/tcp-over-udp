@@ -57,7 +57,9 @@ struct Pipe_Buffer{
     ssize_t do_write_from(void *buf, size_t size) {
         std::unique_lock<std::mutex> lock(mtx);
         //fprintf(stderr, "Write to pipe %ld\n", size);
+        //fprintf(stderr, "After lock before write %d\n", size_pipe_buf);
         ssize_t real_size = write(get_write_side(), buf, size);
+        //fprintf(stderr, "After write\n");
         size_pipe_buf += real_size;
         cv.notify_one();
         return real_size;

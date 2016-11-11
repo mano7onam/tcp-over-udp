@@ -49,7 +49,37 @@ struct Connection {
     bool is_closed_me;
     bool is_closed_he;
     bool is_active;
-    bool can_delete;
+
+    bool flag_accepted;
+    std::mutex flag_accepted_mtx;
+    void do_set_accepted() {
+        flag_accepted_mtx.lock();
+        flag_accepted = true;
+        flag_accepted_mtx.unlock();
+    }
+    bool is_accepted() {
+        flag_accepted_mtx.lock();
+        bool result = flag_accepted;
+        flag_accepted_mtx.unlock();
+        return result;
+    }
+
+    bool flag_set;
+
+    bool flag_ready_to_delete;
+    std::mutex flag_ready_to_delete_mtx;
+    void do_set_ready_to_delete() {
+        flag_ready_to_delete_mtx.lock();
+        is_active = false;
+        flag_ready_to_delete = true;
+        flag_ready_to_delete_mtx.unlock();
+    }
+    bool is_ready_to_delete() {
+        flag_ready_to_delete_mtx.lock();
+        bool result = flag_ready_to_delete;
+        flag_ready_to_delete_mtx.unlock();
+        return result;
+    }
 
     void do_close_connection();
 

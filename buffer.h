@@ -42,9 +42,13 @@ public:
         return can_push;
     }
 
-    void move_buffer(int size) {
-        if (size >= sz)
-            return;
+    int move_buffer(int size) {
+        //fprintf(stderr, "Move buffer %d\n", size);
+        if (size > sz) {
+            fprintf(stderr, "Bad size to move\n");
+            return -1;
+        }
+        //fprintf(stderr, "Good Move buffer %d\n", size);
         memmove(buf, (void*)((char*)buf + size), (size_t)(sz - size));
         p -= size;
     }

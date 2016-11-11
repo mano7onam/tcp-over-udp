@@ -48,7 +48,7 @@ int TCP_Client::set_connection_not_active(std::string cause) {
 
 void background_send_receive_thread_function(TCP_Client *client) {
     bool have_send_data = false;
-    while (client->listen_flag || have_send_data) {
+    while (client->listen_flag || client->connection->send_buf->get_size()) {
         have_send_data = false;
 
         // for work with time
@@ -59,6 +59,8 @@ void background_send_receive_thread_function(TCP_Client *client) {
         fd_set readfds;
         int max_fd = -1;
         FD_ZERO(&readfds);
+
+        client->mtx_connection.lock();
         Connection* con = client->connection;
         if (NULL == con)
             break;
@@ -66,6 +68,8 @@ void background_send_receive_thread_function(TCP_Client *client) {
 
         if (max_fd < con->socket_fd)
             max_fd = con->socket_fd;
+        client->mtx_connection.unlock();
+
         if (-1 == max_fd)
             continue;
 
@@ -156,6 +160,7 @@ int TCP_Client::do_connect(std::string ip_addr, unsigned short port) {
         delete connection;
         return -1;
     }
+    fprintf(stderr, "GOOD CONNECTION\n");
 
     // send first handshake and receive response - second handshake
     while (1) {
@@ -230,20 +235,28 @@ ssize_t TCP_Client::do_recv(void *buf, size_t size) {
 }
 
 ssize_t TCP_Client::do_send(void *buf, size_t size) {
+    /*if (connection == NULL)
+        perror("aaa");*/
+    //bool bbb = connection->is_active;
+    //fprintf(stderr, "sa\n");
     std::unique_lock<std::mutex> lock(connection->mtx_send);
+    //fprintf(stderr, "sb\n");
 
     if (connection->is_closed_me || connection->is_closed_he) {
         fprintf(stderr, "Connections is closed.\n");
         return -1;
     }
+    //fprintf(stderr, "sc\n");
 
     while (connection->send_buf->is_full() && connection->is_active) {
         connection->cv_send.wait(lock);
     }
+    //fprintf(stderr, "sd\n");
     if (!connection->is_active) {
         listen_flag = false;
         return 0;
     }
+    //fprintf(stderr, "se\n");
 
     int pushed = connection->send_buf->push_data(buf, size);
     return pushed;

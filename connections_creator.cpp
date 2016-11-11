@@ -96,11 +96,11 @@ int Connections_Creator::do_receive_message() {
     }
 
     // check if connection has already established
-    mtx_connections->lock();
+    //mtx_connections->lock();
     if (m_established_connections->count(ip_port)) {
         return 0;
     }
-    mtx_connections->unlock();
+    //mtx_connections->unlock();
 
     char flag1 = ((char*)buf)[0];
     char flag2 = ((char*)buf)[1];

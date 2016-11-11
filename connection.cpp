@@ -54,6 +54,9 @@ Connection::Connection(int size_tmp_buf, int size_recv_buf, int size_send_buf,
     is_closed_me = false;
     is_closed_he = false;
     is_active = true;
+    flag_set = false;
+    flag_ready_to_delete = false;
+    flag_accepted = false;
 }
 
 void Connection::do_close_connection() {
@@ -117,13 +120,33 @@ ssize_t Connection::do_background_recv() {
             return -1;
     }
     if (r_recv_message_number == recv_message_number && r_recv_message_size > 0) {
+        //fprintf(stderr, "Ravno!\n");
+        if (size - 20 > 0) {
+            char data[10000];
+            memcpy(data, (char*)tmp_buf + 20, size - 20);
+            data[size - 20] = '\0';
+            //fprintf(stderr, "Data: %s\n", data);
+            int hash = 0;
+            for (int ii = 0; ii < size - 20; ++ii) {
+                hash += ii * data[ii];
+            }
+            //fprintf(stderr, "Size: %d, Hash: %d\n", size - 20, hash);
+        }
         if (size < 20 + r_recv_message_size) {
             //fprintf(stderr, "Error format receive... R_recv_message: %d\n", r_recv_message_number);
             return -1;
         }
         //fprintf(stderr, "Have data number %d, size %d\n", r_recv_message_number, r_recv_message_size);
 
-        ssize_t size_write = pipe_buffer_recv->do_write_from((void *) ((char *) tmp_buf + 20), r_recv_message_size);
+        //fprintf(stderr, "Before recv from pipe\n");
+        ssize_t size_write;
+        if (pipe_buffer_recv->get_size_pipe_buf() < 10000) {
+            size_write = pipe_buffer_recv->do_write_from((void *) ((char *) tmp_buf + 20), r_recv_message_size);
+        }
+        else {
+            return 0;
+        }
+        //fprintf(stderr, "After recv from pipe\n");
 
         ++recv_message_number;
         last_recv_message_size = r_recv_message_size;
@@ -150,7 +173,18 @@ ssize_t Connection::do_background_send(int type_send) {
 
     if (!(send_buf->is_empty())) {
         size_sent_data = send_buf->get_data((void*)((char*)tmp_buf + 20), CUSTOM_CONNECTION_TMP_BUFFER_SIZE - 21, false);
+        //fprintf(stderr, "Size sent data: %d\n", size_sent_data);
+        char mssg[10000];
+        memcpy(mssg, tmp_buf, size_sent_data);
+        mssg[size_sent_data] = '\0';
+        //fprintf(stderr, "%s\n", mssg);
+        int hash = 0;
+        for (int ii = 0; ii < size_sent_data; ++ii) {
+            hash += ii * mssg[ii];
+        }
+        //fprintf(stderr, "Size %d, Hash: %d\n", size_sent_data, hash);
         push_int_to_buffer(send_message_number, tmp_buf, 12);
+        //fprintf(stderr, "Send message number: %d\n", send_message_number);
         push_int_to_buffer(size_sent_data, tmp_buf, 16);
         if (size_sent_data) {
             cv_send.notify_one();
@@ -176,6 +210,7 @@ ssize_t Connection::do_background_send(int type_send) {
 }
 
 Connection::~Connection() {
+    fprintf(stderr, "Connection destructor\n");
     close(socket_fd);
     free(tmp_buf);
     delete recv_buf;
